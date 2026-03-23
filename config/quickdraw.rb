@@ -16,3 +16,9 @@ Bundler.require :test
 require "empirical"
 
 Empirical.init(include: ["#{Dir.pwd}/**/*"], exclude: ["**/excluded.rb"])
+
+# Route the repository's top-level `test` DSL into Quickdraw before the runner
+# requires each `*.test.rb` file.
+def test(description = nil, skip: false, &block)
+	Quickdraw::Test.test(description, skip:, &block)
+end
