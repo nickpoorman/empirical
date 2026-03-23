@@ -72,11 +72,11 @@ class Empirical::SignatureProcessor < Empirical::BaseProcessor
 		pre_end_buffer = []
 		post_end_buffer = []
 
-		positional_splat_type_buffer = []
+		positional_rest_type = nil
 		positional_params_type_buffer = []
 
 		keyword_params_type_buffer = []
-		keyword_splat_type_buffer = []
+		keyword_rest_type = nil
 
 		owner_slice = "self"
 
@@ -113,7 +113,7 @@ class Empirical::SignatureProcessor < Empirical::BaseProcessor
 				case argument
 				# Untyped positional splats (e.g. `*args`) are passed through unchanged.
 				in Prism::SplatNode
-				# no-op
+					positional_rest_type = "::Literal::_Array(::Literal::_Any?)"
 				# Positional splat (e.g. `a = [Type]` becomes `*a`)
 				in Prism::LocalVariableWriteNode[name: name, value: Prism::ArrayNode[elements: [type]]]
 					# make argument a splat
@@ -133,7 +133,7 @@ class Empirical::SignatureProcessor < Empirical::BaseProcessor
 					param_type_slice = "::Literal::_Array(#{type.slice})"
 					param_type_ident = unique_type_ident(param_type_slice)
 
-					positional_splat_type_buffer << param_type_ident
+					positional_rest_type = "::Empirical::TypeStore::#{param_type_ident}"
 					post_end_buffer << store_type(param_type_slice, as: param_type_ident)
 					post_def_buffer << argument_type_check(name:, type: param_type_ident)
 
@@ -170,7 +170,7 @@ class Empirical::SignatureProcessor < Empirical::BaseProcessor
 						case argument
 						# Untyped keyword splats (e.g. `**kwargs`) are passed through unchanged.
 						in Prism::AssocSplatNode
-						# no-op
+							keyword_rest_type = "::Literal::_Hash(Symbol, ::Literal::_Any?)"
 						else
 							name = argument.key.unescaped
 
@@ -209,7 +209,7 @@ class Empirical::SignatureProcessor < Empirical::BaseProcessor
 							param_type_slice = "::Literal::_Hash(#{key_type.slice}, #{value_type.slice})"
 							param_type_ident = unique_type_ident(param_type_slice)
 
-							keyword_splat_type_buffer << "#{name}: ::Empirical::TypeStore::#{param_type_ident}"
+							keyword_rest_type = "::Empirical::TypeStore::#{param_type_ident}"
 							post_end_buffer << store_type(param_type_slice, as: param_type_ident)
 							post_def_buffer << argument_type_check(name:, type: param_type_ident)
 						else
@@ -259,7 +259,7 @@ class Empirical::SignatureProcessor < Empirical::BaseProcessor
 		pre_end_buffer << ")"
 
 		if overloading
-			post_end_buffer << "((::Empirical::OVERLOADED_METHODS[#{owner_slice}] ||= {})[:#{method_name}] ||= []) << ::Empirical::Signature.new(method: #{owner_slice}.instance_method(:#{method_name}), positional_params_type: ::Empirical::PositionalParamsType.new(types: [#{positional_params_type_buffer.join(', ')}], rest: #{positional_splat_type_buffer.first || 'nil'}), keyword_params_type: ::Empirical::KeywordParamsType.new(types: {#{keyword_params_type_buffer.join(', ')}}, rest: #{keyword_splat_type_buffer.first || 'nil'}))"
+			post_end_buffer << "((::Empirical::OVERLOADED_METHODS[#{owner_slice}] ||= {})[:#{method_name}] ||= []) << ::Empirical::Signature.new(method: #{owner_slice}.instance_method(:#{method_name}), positional_params_type: ::Empirical::PositionalParamsType.new(types: [#{positional_params_type_buffer.join(', ')}], rest: #{positional_rest_type || 'nil'}), keyword_params_type: ::Empirical::KeywordParamsType.new(types: {#{keyword_params_type_buffer.join(', ')}}, rest: #{keyword_rest_type || 'nil'}))"
 			post_end_buffer << "::Empirical.generate_root_overloaded_method(#{owner_slice}, :#{method_name})"
 		end
 
