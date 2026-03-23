@@ -22,3 +22,10 @@ Empirical.init(include: ["#{Dir.pwd}/**/*"], exclude: ["**/excluded.rb"])
 def test(description = nil, skip: false, &block)
 	Quickdraw::Test.test(description, skip:, &block)
 end
+
+class Quickdraw::Test
+	# Keep the historical helper name that this repository's tests already use.
+	def assert_equal_ruby(actual, expected)
+		assert_equivalent_ruby(actual, expected)
+	end
+end
