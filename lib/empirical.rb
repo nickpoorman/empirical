@@ -78,7 +78,7 @@ module Empirical
 
 	def self.process(source, with: [])
 		annotations = []
-		tree = Prism.parse(source).value
+		tree = parse_source(source)
 
 		Array(with).each do |processor|
 			processor.new(annotations:).visit(tree)
@@ -98,6 +98,34 @@ module Empirical
 		end
 
 		buffer << source.byteslice(source_position, source.bytesize - source_position)
+		buffer
+	end
+
+	# Prism rejects bare `yield` inside `fun` bodies before the signature processor
+	# can rewrite `fun` into a real Ruby `def`, so we sanitize `yield` only for the
+	# parser pass and keep emitting the original source text unchanged.
+	def self.parse_source(source)
+		result = Prism.parse(source)
+		return result.value unless result.errors.any? { |error| error.message == "Invalid yield" }
+
+		Prism.parse(sanitize_yield_for_parse(source)).value
+	end
+
+	def self.sanitize_yield_for_parse(source)
+		annotations = Prism.lex(source).value.filter_map do |token, _state|
+			next unless token.type == :KEYWORD_YIELD
+
+			[token.location.start_offset, token.location.end_offset - token.location.start_offset, "__yd_"]
+		end
+
+		return source if annotations.empty?
+
+		buffer = source.dup
+
+		annotations.reverse_each do |offset, length, string|
+			buffer[offset, length] = string
+		end
+
 		buffer
 	end
 

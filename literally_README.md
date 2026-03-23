@@ -130,4 +130,14 @@ fun configure(&block) => String do
 end
 ```
 
-If you only need to check for a block, `block_given?` still works as usual.
+If you only need to check for a block, `block_given?` and bare `yield` still work as usual.
+
+```ruby
+fun maybe_configure => String do
+  if block_given?
+    yield
+  else
+    "default"
+  end
+end
+```
