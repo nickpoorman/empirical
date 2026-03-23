@@ -89,7 +89,7 @@ class Empirical::SignatureProcessor < Empirical::BaseProcessor
 			end
 		end
 
-		overloading = @block_stack.any? { it.name == :overload }
+		overloading = @block_stack.any? { |call_node| call_node.name == :overload }
 
 		case signature
 		# parameterless method defs (e.g. `fun foo` or `fun foo()`)
@@ -97,7 +97,8 @@ class Empirical::SignatureProcessor < Empirical::BaseProcessor
 		# no-op
 		# parameterful method defs (e.g. `fun foo(a: Type)` or `fun foo(a = Type)`)
 		in Prism::CallNode
-			raise SyntaxError if signature.block
+			# Blocks are intentionally untyped, but `fun` methods should still be able
+			# to receive and forward `&block` just like plain Ruby defs.
 
 			case signature.receiver
 			when nil
@@ -110,6 +111,9 @@ class Empirical::SignatureProcessor < Empirical::BaseProcessor
 
 			signature.arguments&.arguments&.each do |argument|
 				case argument
+				# Untyped positional splats (e.g. `*args`) are passed through unchanged.
+				in Prism::SplatNode
+				# no-op
 				# Positional splat (e.g. `a = [Type]` becomes `*a`)
 				in Prism::LocalVariableWriteNode[name: name, value: Prism::ArrayNode[elements: [type]]]
 					# make argument a splat
@@ -163,24 +167,29 @@ class Empirical::SignatureProcessor < Empirical::BaseProcessor
 				# Keyword (e.g. `a: Type` becomes `a: nil` or `a: default`)
 				in Prism::KeywordHashNode
 					argument.elements.each do |argument|
-						name = argument.key.unescaped
+						case argument
+						# Untyped keyword splats (e.g. `**kwargs`) are passed through unchanged.
+						in Prism::AssocSplatNode
+						# no-op
+						else
+							name = argument.key.unescaped
 
-						optional = false
+							optional = false
 
-						if name.end_with?("?")
-							name = name[0..-2]
-							optional = true
+							if name.end_with?("?")
+								name = name[0..-2]
+								optional = true
 
-							@annotations << [
-								argument.key.location.end_offset - 2,
-								1,
-								"",
-							]
-						end
+								@annotations << [
+									argument.key.location.end_offset - 2,
+									1,
+									"",
+								]
+							end
 
-						typed_param = argument.value
+							typed_param = argument.value
 
-						case typed_param
+							case typed_param
 						# Keyword splat (e.g. `a: {Type => Type}` becomes `**a`)
 						in Prism::HashNode[elements: [Prism::AssocNode[key: key_type, value: value_type]]]
 							# make argument a splat
@@ -233,6 +242,7 @@ class Empirical::SignatureProcessor < Empirical::BaseProcessor
 							keyword_params_type_buffer << "#{name}: ::Empirical::TypeStore::#{param_type_ident}"
 							post_end_buffer << store_type(param_type_slice, as: param_type_ident)
 							post_def_buffer << argument_type_check(name:, type: param_type_ident)
+							end
 						end
 					end
 				else

@@ -120,4 +120,14 @@ end
 
 ### Blocks
 
-Blocks are always optional and always Procs so there’s no reason to type them. If you want to require a block, we recommend adding `raise unless block_given?` to your method.
+Blocks are always optional and always Procs so there’s no reason to type them. If you want to require a block, add an explicit guard in your method.
+
+```ruby
+fun configure(&block) => String do
+  raise ArgumentError, "block required" unless block
+
+  block.call
+end
+```
+
+If you only need to check for a block, `block_given?` still works as usual.
