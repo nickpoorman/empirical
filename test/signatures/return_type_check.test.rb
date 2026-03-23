@@ -26,6 +26,30 @@ test "raises when returning the wrong type" do
 	end
 end
 
+test "supports an explicit return with the right type" do
+	mod = Module.new do
+		extend self
+
+		fun example => String do
+			return "Hello"
+		end
+	end
+
+	assert_equal mod.example, "Hello"
+end
+
+test "supports a bare return for nilable types" do
+	mod = Module.new do
+		extend self
+
+		fun example => _Nilable(String) do
+			return
+		end
+	end
+
+	assert_equal mod.example, nil
+end
+
 test "raises when early returning the wrong type" do
 	mod = Module.new do
 		extend self

@@ -81,10 +81,10 @@ module Empirical
 		tree = parse_source(source)
 
 		Array(with).each do |processor|
-			processor.new(annotations:).visit(tree)
+			processor.new(annotations:, source:).visit(tree)
 		end
 
-		Empirical::EvalProcessor.new(annotations:).visit(tree)
+		Empirical::EvalProcessor.new(annotations:, source:).visit(tree)
 
 		annotations.sort_by!(&:first)
 

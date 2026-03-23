@@ -324,6 +324,27 @@ class Empirical::SignatureProcessor < Empirical::BaseProcessor
 		"::Empirical::TypeStore::#{as} = #{type}"
 	end
 
+	private def return_value_expression(node)
+		arguments = node.arguments&.arguments || []
+		arguments_source = if node.arguments
+			@source&.byteslice(
+				node.arguments.location.start_offset,
+				node.arguments.location.end_offset - node.arguments.location.start_offset
+			)
+		end
+
+		case arguments
+		in []
+			"nil"
+		in [Prism::SplatNode]
+			"[#{arguments_source}]"
+		in [argument]
+			@source.byteslice(argument.location.start_offset, argument.location.end_offset - argument.location.start_offset)
+		else
+			"[#{arguments_source}]"
+		end
+	end
+
 	def visit_return_node(node)
 		case @return_type
 		in nil
@@ -345,16 +366,13 @@ class Empirical::SignatureProcessor < Empirical::BaseProcessor
 				"(raise(::Empirical::NeverError.new))",
 			]
 		else
+			return_value = return_value_expression(node)
+
 			@annotations.push(
 				[
 					node.keyword_loc.start_offset,
-					node.keyword_loc.end_offset - node.keyword_loc.start_offset,
-					"(__literally_returning__ = (",
-				],
-				[
-					node.location.end_offset,
-					0,
-					");(raise ::Empirical::TypeError.return_type_error(value: __literally_returning__, expected: #{@return_type.slice}, method_name: __method__, context: self) unless #{@return_type.slice} === __literally_returning__);return(__literally_returning__))",
+					node.location.end_offset - node.keyword_loc.start_offset,
+					"if true; return((__literally_returning__ = (#{return_value}));(raise ::Empirical::TypeError.return_type_error(value: __literally_returning__, expected: #{@return_type.slice}, method_name: __method__, context: self) unless #{@return_type.slice} === __literally_returning__);__literally_returning__); end",
 				]
 			)
 		end
